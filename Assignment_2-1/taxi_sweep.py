@@ -1,9 +1,53 @@
-import gym
 from collections import deque
-import sys
 from collections import defaultdict
+
 import numpy as np
+import gym
+import wandb
+
 from agent import Agent
+
+sweep_config = {
+    'name': 'MC-Control-sweep3',
+    'method': 'bayes',
+    'parameters': {
+        'alpha': {
+            'distribution': 'log_uniform_values',
+            'min': 1e-3,
+            'max': 1e-2,
+        },
+        'gamma': {
+            'distribution': 'uniform',
+            'min': 0.01,
+            'max': 0.99
+        },
+        'eps': {
+            'distribution': 'log_uniform_values',
+            'min': 0.05,
+            'max': 0.5,
+        },
+        'decay_method': {
+            'values': ['exponential', 'harmonic']
+        },
+        'eps_decay': {
+            'distribution': 'log_uniform_values',
+            'min': 1 - 1e-1,
+            'max': 1 - 1e-5,
+        },
+    },
+    'metric': {
+        'name': 'avg_100',
+        'goal': 'maximize',
+    },
+    'early_terminate': {
+        'type': 'hyperband',
+        'max_iter': 1000,
+        's': 4,
+        'eta': 2
+    }
+}
+
+sweep_id = wandb.sweep(sweep_config, project='RL')
 
 env = gym.make('Taxi-v3')
 
@@ -43,9 +87,9 @@ def testing_without_learning():
         state = next_state
 
 
-def model_free_RL(Q, mode):
-    agent = Agent(Q, mode)
-    num_episodes = 100000
+def model_free_RL(Q, mode, *args, **kwargs):
+    agent = Agent(Q, mode, *args, **kwargs)
+    num_episodes = 50000
     last_100_episode_rewards = deque(maxlen=100)
     for i_episode in range(1, num_episodes + 1):
 
@@ -63,11 +107,13 @@ def model_free_RL(Q, mode):
                 break
             state = next_state
 
-        if (100 <= i_episode < 1000 and i_episode % 100 == 0) \
-                or (i_episode >= 1000 and i_episode % 1000 == 0):
+        # if (100 <= i_episode < 1000 and i_episode % 100 == 0) \
+        #         or (i_episode >= 1000 and i_episode % 1000 == 0):
+        if 100 <= i_episode and i_episode % 100 == 0:
             last_100_episode_rewards.append(episode_rewards)
             avg_reward = sum(last_100_episode_rewards) / len(last_100_episode_rewards)
             print(f'Episode {i_episode}/{num_episodes} || Best avg reward {avg_reward}')
+            wandb.log({'avg_100': avg_reward})
 
     print()
 
@@ -94,6 +140,17 @@ def testing_after_learning(Q, mode):
     print("avg: " + str(sum(total_test_rewards) / n_tests))
 
 
+def _wrapper():
+    with wandb.init() as run:
+        config = wandb.config
+        Q = defaultdict(lambda: np.zeros(action_size))
+        model_free_RL(
+            Q, "mc_control",
+            alpha=config.alpha, gamma=config.gamma, eps=config.eps,
+            decay_method=config.decay_method, eps_decay=config.eps_decay
+        )
+
+
 Q = defaultdict(lambda: np.zeros(action_size))
 while True:
     print()
@@ -109,8 +166,7 @@ while True:
     if menu == 1:
         testing_without_learning()
     elif menu == 2:
-        Q = defaultdict(lambda: np.zeros(action_size))
-        model_free_RL(Q, "mc_control")
+        wandb.agent(sweep_id, function=_wrapper, project='RL', count=30)
     elif menu == 3:
         Q = defaultdict(lambda: np.zeros(action_size))
         model_free_RL(Q, "q_learning")

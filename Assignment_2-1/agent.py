@@ -1,4 +1,6 @@
+import time
 import random
+from collections import defaultdict
 
 import numpy as np
 
@@ -6,7 +8,7 @@ MODES = ['mc_control', 'q_learning', 'test_mode']
 
 
 class Agent:
-    def __init__(self, Q, mode="test_mode", alpha=0.1, gamma=0.9, eps=0.1, eps_decay=1 - 1e-4):
+    def __init__(self, Q, mode="test_mode", alpha=0.01, gamma=0.9, eps=0.1, decay_method='exponential', eps_decay=1 - 1e-4):
         self.Q = Q
         assert mode in MODES
         self.mode = mode
@@ -16,8 +18,19 @@ class Agent:
         self.gamma = gamma
         self.init_eps = eps
         self.eps = 0 if mode == 'test_mode' else eps
+        self.decay_method = decay_method
         self.eps_decay = eps_decay
         self.counter = 1
+        # mode specific
+        if mode == 'mc_control':
+            self.episode = []  # tuple of S, A, R
+            # self.alpha = 0.1
+            # self.gamma = 0.9
+            # self.init_eps = 0.5
+            # self.eps = self.init_eps
+            # self.decay_method = 'harmonic'
+            # self.decay_method = 'exponential'
+            # self.eps_decay = 1e-3
 
     def select_action(self, state):
         """
@@ -45,13 +58,39 @@ class Agent:
         - done: whether the episode is complete (True or False)
         """
         if self.mode == 'mc_control':
-            pass
+            self.episode.append((state, action, reward))
+            if done:
+
+                '''
+                Impl 1
+                '''
+                states, actions, rewards = zip(*self.episode)
+                discount_factors = np.array([self.gamma ** j for j in range(len(rewards))])
+                # For each state, get discounted cumulative reward
+                Gs = [
+                    np.sum(rewards[i:] * discount_factors[:-(i+1)])
+                    for i in range(len(states))
+                ]
+                # Update
+                for i, G in enumerate(Gs):
+                    self.Q[states[i]][actions[i]] += self.alpha * (G - self.Q[states[i]][actions[i]])
+                '''
+                Impl 2
+                '''
+                # rewards = defaultdict(lambda: np.zeros(6))
+                # for history in reversed(self.episode):
+                #     state, action, reward = history
+                #     rewards[state][action] = reward + self.gamma * rewards[state][action]
+                #     self.Q[state][action] += self.alpha * (rewards[state][action] - self.Q[state][action])
+
+                self.episode.clear()
+
         elif self.mode == 'q_learning':
             self.Q[state][action] += self.alpha * (
                     reward + self.gamma * np.max(self.Q[next_state]) - self.Q[state][action]
             )
         if done:
-            self._epsilon_decay()
+            self._epsilon_decay(self.decay_method)
 
     def _epsilon_decay(self, method='exponential'):
         if method == 'exponential':
