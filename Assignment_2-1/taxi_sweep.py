@@ -8,18 +8,18 @@ import wandb
 from agent import Agent
 
 sweep_config = {
-    'name': 'MC-Control-sweep3',
+    'name': 'Q-Learning-sweep1',
     'method': 'bayes',
     'parameters': {
         'alpha': {
             'distribution': 'log_uniform_values',
             'min': 1e-3,
-            'max': 1e-2,
+            'max': 5e-1,
         },
         'gamma': {
             'distribution': 'uniform',
-            'min': 0.01,
-            'max': 0.99
+            'min': 0.7,
+            'max': 1.0
         },
         'eps': {
             'distribution': 'log_uniform_values',
@@ -140,12 +140,23 @@ def testing_after_learning(Q, mode):
     print("avg: " + str(sum(total_test_rewards) / n_tests))
 
 
-def _wrapper():
+def _mc_wrapper():
     with wandb.init() as run:
         config = wandb.config
         Q = defaultdict(lambda: np.zeros(action_size))
         model_free_RL(
             Q, "mc_control",
+            alpha=config.alpha, gamma=config.gamma, eps=config.eps,
+            decay_method=config.decay_method, eps_decay=config.eps_decay
+        )
+
+
+def _q_wrapper():
+    with wandb.init() as run:
+        config = wandb.config
+        Q = defaultdict(lambda: np.zeros(action_size))
+        model_free_RL(
+            Q, "q_learning",
             alpha=config.alpha, gamma=config.gamma, eps=config.eps,
             decay_method=config.decay_method, eps_decay=config.eps_decay
         )
@@ -166,10 +177,9 @@ while True:
     if menu == 1:
         testing_without_learning()
     elif menu == 2:
-        wandb.agent(sweep_id, function=_wrapper, project='RL', count=30)
+        wandb.agent(sweep_id, function=_mc_wrapper, project='RL', count=100)
     elif menu == 3:
-        Q = defaultdict(lambda: np.zeros(action_size))
-        model_free_RL(Q, "q_learning")
+        wandb.agent(sweep_id, function=_q_wrapper, project='RL', count=100)
     elif menu == 4:
         testing_after_learning(Q, "test_mode")
     elif menu == 5:

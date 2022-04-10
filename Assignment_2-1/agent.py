@@ -21,16 +21,22 @@ class Agent:
         self.decay_method = decay_method
         self.eps_decay = eps_decay
         self.counter = 1
-        # mode specific
+        # Mode specific variables
+        # Hyperparameters are optimized with Bayesian optimization
         if mode == 'mc_control':
             self.episode = []  # tuple of S, A, R
-            # self.alpha = 0.1
-            # self.gamma = 0.9
-            # self.init_eps = 0.5
-            # self.eps = self.init_eps
-            # self.decay_method = 'harmonic'
-            # self.decay_method = 'exponential'
-            # self.eps_decay = 1e-3
+            self.alpha = 0.001221
+            self.gamma = 0.7777
+            self.init_eps = 0.08547
+            self.eps = self.init_eps
+            self.decay_method = 'harmonic'
+        elif mode == 'q_learning':
+            self.alpha = 0.06946
+            self.gamma = 0.8898
+            self.init_eps = 0.06279
+            self.eps = self.init_eps
+            self.decay_method = 'exponential'
+            self.eps_decay = 0.9614
 
     def select_action(self, state):
         """
@@ -65,7 +71,7 @@ class Agent:
                 Impl 1
                 '''
                 states, actions, rewards = zip(*self.episode)
-                discount_factors = np.array([self.gamma ** j for j in range(len(rewards))])
+                discount_factors = np.array([self.gamma ** j for j in range(len(rewards)+1)])
                 # For each state, get discounted cumulative reward
                 Gs = [
                     np.sum(rewards[i:] * discount_factors[:-(i+1)])
